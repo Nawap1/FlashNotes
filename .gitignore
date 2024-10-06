@@ -1,1 +1,4 @@
 /samples/
+/models/
+Modelfile
+__pycache__/
