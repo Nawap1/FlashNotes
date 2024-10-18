@@ -38,9 +38,10 @@ async def lifespan(app: FastAPI):
     embeddings = initialize_embeddings()
     vector_store = Chroma(embedding_function=embeddings, collection_name="chatbot_docs")
     yield
+    vector_store.delete_collection()
     conversation_chains.clear()
 
-app = FastAPI(title="RAG Chatbot API", lifespan=lifespan)
+app = FastAPI(title="Flash Notes Bot", lifespan=lifespan)
 
 class ChatMessage(BaseModel):
     query: str
