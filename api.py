@@ -107,7 +107,7 @@ def get_response_from_chain(chain, query):
         if not query.startswith("<|im_start|>"):
             formatted_query = f"<|im_start|>user\n{query}<|im_end|>"
             
-        response = chain({"question": formatted_query})
+        response = chain.invoke({"question": formatted_query})
         answer = response.get("answer", "I couldn't find an answer.")
         
         # Ensure the answer has the proper tokens
