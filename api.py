@@ -1,5 +1,9 @@
 from contextlib import asynccontextmanager
+import os
+import shutil
+import tempfile
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 import uvicorn
@@ -12,6 +16,9 @@ from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import Document, AIMessage, HumanMessage, SystemMessage
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate, AIMessagePromptTemplate
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import UploadFile, File
+from utils import DocumentReader
 
 chat_model = None
 embeddings = None
@@ -42,7 +49,13 @@ async def lifespan(app: FastAPI):
     conversation_chains.clear()
 
 app = FastAPI(title="Flash Notes Bot", lifespan=lifespan)
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Replace "*" with specific domains to restrict access if needed
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow specific HTTP methods or all
+    allow_headers=["*"],  # Allow specific headers or all
+)
 class ChatMessage(BaseModel):
     query: str
     conversation_id: Optional[str] = "default"
@@ -120,6 +133,32 @@ def get_response_from_chain(chain, query):
     except Exception as e:
         print(f"Error in get_response_from_chain: {str(e)}")
         return "<|im_start|>assistant\nI encountered an error while processing your request.<|im_end|>", []
+
+
+@app.post("/extract-text/")
+async def extract_text(file: UploadFile = File(...)):
+    try:
+        os.makedirs("temp", exist_ok=True)
+        # Save the uploaded file to a temporary location
+        file_location = f"temp/{file.filename}"
+        with open(file_location, "wb") as f:
+            f.write(await file.read())
+
+        # Create a DocumentReader instance and extract text
+        reader = DocumentReader(file_location)
+        text = reader.extract_text()
+
+        # Clean up the temporary file
+        os.remove(file_location)
+
+        return JSONResponse(content={"text": text})
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/add_document")
 async def add_document(document: DocumentInput):
