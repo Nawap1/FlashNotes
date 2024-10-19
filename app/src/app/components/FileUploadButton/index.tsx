@@ -1,7 +1,9 @@
 "use client";
-import React, { useRef } from 'react';
-import { Upload } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Upload, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { api } from '@/app/services/api';
 import type { FileData } from '@/types';
 
 interface FileUploadButtonProps {
@@ -22,35 +24,72 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
   size = "default" 
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleClick = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-    const validFiles = files.filter(file => ACCEPTED_FILE_TYPES[file.type as keyof typeof ACCEPTED_FILE_TYPES]);
-    
-    validFiles.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
+    const validFiles = files.filter(file => 
+      ACCEPTED_FILE_TYPES[file.type as keyof typeof ACCEPTED_FILE_TYPES]
+    );
+
+    if (validFiles.length === 0) {
+      setError('Please select valid PDF, PPTX, or TXT files.');
+      return;
+    }
+
+    setError(null);
+
+    for (const file of validFiles) {
+      setIsLoading(true);
+      
+      try {
+        // Extract text from the document
+        const extractedText = await api.extractText(file);
+        
+        // Generate a unique conversation ID
+        const conversationId = Math.random().toString(36).substring(7);
+        
+        // Add document to vector store
+        await api.addDocument(extractedText, {
+          filename: file.name,
+          type: file.type,
+          timestamp: new Date().toISOString(),
+          conversation_id: conversationId, // Make sure to use conversation_id to match your API
+        });
+
+        // Create FileData object
         const newFile: FileData = {
           id: Date.now(),
           title: file.name,
           type: ACCEPTED_FILE_TYPES[file.type as keyof typeof ACCEPTED_FILE_TYPES],
-          content: e.target?.result,
-          size: file.size
+          content: extractedText, // Store the extracted text as content
+          size: file.size,
+          extractedText,
+          conversationId,
         };
+        
+        // Call the onFileUpload callback
         onFileUpload(newFile);
-      };
-      reader.readAsArrayBuffer(file);
-    });
+
+      } catch (error) {
+        console.error('Error processing file:', error);
+        setError(error instanceof Error ? error.message : 'Error processing file. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    }
     
+    // Reset the file input
     event.target.value = '';
   };
 
   return (
-    <>
+    <div className="w-full max-w-md">
       <input
         type="file"
         ref={fileInputRef}
@@ -59,9 +98,27 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
         className="hidden"
         multiple
       />
-      <Button onClick={handleClick} variant={variant} size={size}>
-        <Upload size={20}/>
+      
+      <Button 
+        onClick={handleClick} 
+        variant={variant} 
+        size={size} 
+        disabled={isLoading}
+        className="w-full"
+      >
+        <Upload 
+          size={20} 
+          className={`mr-2 ${isLoading ? 'animate-spin' : ''}`} 
+        />
+        {isLoading ? 'Processing...' : 'Upload Documents'}
       </Button>
-    </>
+
+      {error && (
+        <Alert variant="destructive" className="mt-2">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+    </div>
   );
 };

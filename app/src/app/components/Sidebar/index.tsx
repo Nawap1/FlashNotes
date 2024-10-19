@@ -5,11 +5,19 @@ import type { FileData } from '@/types';
 
 interface SidebarProps {
   files: FileData[];
+  selectedFile?: FileData;
+  onFileSelect: (file: FileData) => void;
   onFileUpload: (file: FileData) => void;
   error: string;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ files, onFileUpload, error }) => (
+export const Sidebar: React.FC<SidebarProps> = ({ 
+  files, 
+  selectedFile,
+  onFileSelect,
+  onFileUpload, 
+  error 
+}) => (
   <div className="w-64 bg-white p-4 border-r">
     <div className="flex items-center justify-between mb-6">
       <h1 className="text-xl font-bold">Flash Notes</h1>
@@ -26,6 +34,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ files, onFileUpload, error }) 
       </Alert>
     )}
 
-    <FileList files={files} />
+    <FileList 
+      files={files}
+      selectedFile={selectedFile}
+      onFileSelect={onFileSelect}
+    />
   </div>
 );

@@ -13,7 +13,6 @@ export const LandingContent: React.FC<LandingContentProps> = ({ onFileUpload }) 
     <div className="flex flex-col items-center space-y-2">
       <div className="flex items-center space-x-4">
         <FileUploadButton onFileUpload={onFileUpload} />
-        <div className="text-lg font-bold">Upload Documents</div>
       </div>
       <p className="text-sm text-gray-500 text-center">
         Supported formats: PDF, PPTX, TXT

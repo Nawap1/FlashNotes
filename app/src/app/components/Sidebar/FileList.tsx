@@ -4,12 +4,22 @@ import type { FileData } from '@/types';
 
 interface FileListProps {
   files: FileData[];
+  selectedFile?: FileData;
+  onFileSelect: (file: FileData) => void;
 }
 
-export const FileList: React.FC<FileListProps> = ({ files }) => (
+export const FileList: React.FC<FileListProps> = ({ files, selectedFile, onFileSelect }) => (
   <div className="space-y-2">
     {files.map(file => (
-      <Card key={file.id} className="cursor-pointer hover:bg-gray-50">
+      <Card 
+        key={file.id} 
+        className={`cursor-pointer transition-colors ${
+          selectedFile?.id === file.id 
+            ? 'bg-blue-50 border-blue-200' 
+            : 'hover:bg-gray-50'
+        }`}
+        onClick={() => onFileSelect(file)}
+      >
         <CardContent className="p-3">
           <div className="flex items-center gap-2">
             <File size={16} />

@@ -172,7 +172,7 @@ async def add_document(document: DocumentInput):
             documents=docs,
             embedding=embeddings,
             collection_name="chatbot_docs",
-            persist_directory="/db"
+            persist_directory="./db"
         )
         return {"message": "Document added successfully"}
     except Exception as e:

@@ -6,9 +6,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChatTab } from './tabs/ChatTab';
 import { SummaryTab } from './tabs/SummaryTab';
 import { QuizTab } from './tabs/QuizTab';
-import type { TabType } from '@/types';
+import type { TabType, FileData } from '@/types';
 
-export const MainContent = () => {
+interface MainContentProps {
+  selectedFile?: FileData;
+}
+
+export const MainContent: React.FC<MainContentProps> = ({ selectedFile }) => {
   const [activeTab, setActiveTab] = useState<TabType>('chat');
 
   return (
@@ -30,7 +34,7 @@ export const MainContent = () => {
         </TabsList>
 
         <TabsContent value="chat">
-          <ChatTab />
+          <ChatTab selectedFile={selectedFile} />
         </TabsContent>
         <TabsContent value="summary">
           <SummaryTab />
