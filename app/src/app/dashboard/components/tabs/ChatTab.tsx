@@ -30,23 +30,60 @@ export const ChatTab: React.FC<ChatTabProps> = ({ selectedFile }) => {
     setInput('');
     setError(null);
     
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    // Add user message to chat
+    const newUserMessage: Message = { role: 'user', content: userMessage };
+    setMessages(prev => [...prev, newUserMessage]);
     
     setIsLoading(true);
     try {
-      const response = await api.chat(userMessage, selectedFile.conversationId);
+      // Format message with tokens for the API
+      const formattedMessage = `<|im_start|>user\n${userMessage}<|im_end|>`;
+      const response = await api.chat(formattedMessage, selectedFile.conversationId);
       
-      setMessages(prev => [...prev, {
+      // Clean the response if it still contains tokens
+      const cleanedResponse = response.answer.replace(/<\|im_start\|>assistant\n/, '').replace(/<\|im_end\|>/, '').trim();
+      
+      const newAssistantMessage: Message = {
         role: 'assistant',
-        content: response.answer,
-        sources: response.sources ? [response.sources[0]] : [] // Only keep the first source
-      }]);
+        content: cleanedResponse,
+        sources: response.sources
+      };
+      
+      setMessages(prev => [...prev, newAssistantMessage]);
     } catch (error) {
-      setError('Failed to get response. Please try again.');
       console.error('Chat error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to get response. Please try again.');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const renderMessage = (message: Message) => {
+    const messageClass = message.role === 'user' 
+      ? 'bg-blue-100 ml-auto' 
+      : 'bg-gray-200 mr-auto';
+
+    return (
+      <div className={`p-4 rounded-lg ${messageClass} max-w-[80%]`}>
+        {message.role === 'assistant' ? (
+          <>
+            <ReactMarkdown className="prose prose-sm max-w-none">
+              {message.content}
+            </ReactMarkdown>
+            {message.sources && message.sources.length > 0 && (
+              <div className="mt-2 text-sm text-gray-600">
+                <p className="font-semibold">Source:</p>
+                {message.sources.map((source, index) => (
+                  <p key={index} className="pl-2">{source}</p>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <p>{message.content}</p>
+        )}
+      </div>
+    );
   };
 
   if (!selectedFile) {
@@ -59,45 +96,24 @@ export const ChatTab: React.FC<ChatTabProps> = ({ selectedFile }) => {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Chat container */}
       <div className="flex-1 overflow-y-auto bg-gray-100 p-4 space-y-4 pb-20">
         {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`p-4 rounded-lg ${
-              message.role === 'user'
-                ? 'bg-blue-100 ml-auto max-w-[80%]'
-                : 'bg-gray-200 mr-auto max-w-[80%]'
-            }`}
-          >
-            {message.role === 'assistant' ? (
-              <ReactMarkdown className="prose prose-sm max-w-none">
-                {message.content}
-              </ReactMarkdown>
-            ) : (
-              <p>{message.content}</p>
-            )}
-            {message.role === 'assistant' && message.sources && message.sources.length > 0 && (
-              <div className="mt-2 text-sm text-gray-600">
-                <p className="font-semibold">Source:</p>
-                <p className="pl-2">{message.sources[0]}</p>
-              </div>
-            )}
-          </div>
+          <div key={index}>{renderMessage(message)}</div>
         ))}
+        
         {isLoading && (
           <div className="flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
           </div>
         )}
+        
         {error && (
-          <div className="text-red-500 text-center p-2">
+          <div className="text-red-500 text-center p-2 bg-red-50 rounded">
             {error}
           </div>
         )}
       </div>
 
-      {/* Input bar */}
       <form 
         onSubmit={handleSubmit} 
         className="bg-white p-4 border-t flex items-center space-x-2 sticky bottom-0 left-0 right-0"

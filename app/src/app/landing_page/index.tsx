@@ -1,4 +1,3 @@
-// app/landing_page/index.tsx
 "use client";
 import { useRouter } from 'next/navigation';
 import { LandingContent } from './components/LandingContent';
@@ -14,13 +13,8 @@ export default function FlashNotes() {
       const updatedFiles = [...existingFiles, newFile];
       localStorage.setItem('flashNotes', JSON.stringify(updatedFiles));
       
-      // Navigate to dashboard using both methods to ensure it works
-      window.location.href = '/dashboard';
-      
-      // Fallback navigation
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 100);
+      // Use only router.push for navigation
+      router.push('/dashboard');
     } catch (error) {
       console.error('Navigation error:', error);
       alert('Error navigating to dashboard. Please try again.');

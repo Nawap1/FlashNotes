@@ -1,9 +1,7 @@
-// app/services/api.ts
 import axios, { AxiosError } from 'axios';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-// Define types to match FastAPI endpoints
 interface DocumentInput {
   content: string;
   metadata?: Record<string, any>;
@@ -25,6 +23,17 @@ const axiosInstance = axios.create({
   timeout: 30000,
 });
 
+// Add response interceptor to handle tokens globally
+axiosInstance.interceptors.response.use(response => {
+  if (response.data && response.data.answer) {
+    response.data.answer = response.data.answer
+      .replace(/<\|im_start\|>assistant\n/, '')
+      .replace(/<\|im_end\|>/, '')
+      .trim();
+  }
+  return response;
+});
+
 export const api = {
   async extractText(file: File): Promise<string> {
     try {
@@ -40,13 +49,10 @@ export const api = {
       return response.data.text;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        if (error.response?.status === 404) {
-          throw new Error('File not found or could not be processed');
-        } else if (error.response?.status === 400) {
-          throw new Error('Invalid file format or content');
-        }
+        const errorMessage = error.response?.data?.detail || 'Failed to extract text from file';
+        throw new Error(errorMessage);
       }
-      throw new Error('Failed to extract text from file');
+      throw error;
     }
   },
 
@@ -59,8 +65,11 @@ export const api = {
 
       await axiosInstance.post('/add_document', document);
     } catch (error) {
-      console.error('Error adding document:', error);
-      throw new Error('Failed to add document to vector store');
+      if (axios.isAxiosError(error)) {
+        const errorMessage = error.response?.data?.detail || 'Failed to add document to vector store';
+        throw new Error(errorMessage);
+      }
+      throw error;
     }
   },
 
@@ -74,8 +83,11 @@ export const api = {
       const response = await axiosInstance.post<ChatResponse>('/chat', message);
       return response.data;
     } catch (error) {
-      console.error('Error in chat:', error);
-      throw new Error('Failed to get chat response');
+      if (axios.isAxiosError(error)) {
+        const errorMessage = error.response?.data?.detail || 'Failed to get chat response';
+        throw new Error(errorMessage);
+      }
+      throw error;
     }
   },
 
@@ -83,8 +95,11 @@ export const api = {
     try {
       await axiosInstance.delete(`/conversations/${conversationId}`);
     } catch (error) {
-      console.error('Error deleting conversation:', error);
-      throw new Error('Failed to delete conversation');
+      if (axios.isAxiosError(error)) {
+        const errorMessage = error.response?.data?.detail || 'Failed to delete conversation';
+        throw new Error(errorMessage);
+      }
+      throw error;
     }
   }
 };

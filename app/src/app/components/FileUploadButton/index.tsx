@@ -26,11 +26,9 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const handleClick = () => {
     fileInputRef.current?.click();
   };
-
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     const validFiles = files.filter(file => 
@@ -48,18 +46,19 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
       setIsLoading(true);
       
       try {
+        // Generate a unique conversation ID
+        const conversationId = `conv_${Math.random().toString(36).substring(2, 15)}`;
+        
         // Extract text from the document
         const extractedText = await api.extractText(file);
         
-        // Generate a unique conversation ID
-        const conversationId = Math.random().toString(36).substring(7);
-        
-        // Add document to vector store
+        // Add document to vector store with conversation ID
         await api.addDocument(extractedText, {
           filename: file.name,
           type: file.type,
           timestamp: new Date().toISOString(),
-          conversation_id: conversationId, // Make sure to use conversation_id to match your API
+          conversation_id: conversationId,
+          page: 1  // Add page number if available
         });
 
         // Create FileData object
@@ -67,13 +66,12 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
           id: Date.now(),
           title: file.name,
           type: ACCEPTED_FILE_TYPES[file.type as keyof typeof ACCEPTED_FILE_TYPES],
-          content: extractedText, // Store the extracted text as content
+          content: extractedText,
           size: file.size,
           extractedText,
           conversationId,
         };
         
-        // Call the onFileUpload callback
         onFileUpload(newFile);
 
       } catch (error) {
@@ -84,10 +82,8 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
       }
     }
     
-    // Reset the file input
     event.target.value = '';
   };
-
   return (
     <div className="w-full max-w-md">
       <input

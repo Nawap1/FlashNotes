@@ -6,21 +6,35 @@ import { MainContent } from './MainContent';
 import type { FileData } from '@/types';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+const STORAGE_KEY = 'flashNotes';
 
 export default function DashboardContent() {
   const [files, setFiles] = useState<FileData[]>([]);
   const [selectedFile, setSelectedFile] = useState<FileData | undefined>();
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  // Load files from localStorage and only redirect if no files exist
+  // Load files from localStorage
   useEffect(() => {
-    const savedFiles = JSON.parse(localStorage.getItem('flashNotes') || '[]');
-    setFiles(savedFiles);
-    
-    // Only redirect if there are no files
-    if (savedFiles.length === 0) {
+    try {
+      const savedFiles = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      setFiles(savedFiles);
+      
+      // If there are files, select the first one
+      if (savedFiles.length > 0) {
+        setSelectedFile(savedFiles[0]);
+      } else {
+        // Only redirect if there are no files and we're done loading
+        router.push('/');
+      }
+    } catch (error) {
+      console.error('Error loading files from localStorage:', error);
+      localStorage.removeItem(STORAGE_KEY);
+      setFiles([]);
       router.push('/');
+    } finally {
+      setIsLoading(false);
     }
   }, [router]);
 
@@ -31,16 +45,50 @@ export default function DashboardContent() {
       return;
     }
     
+    if (files.some(file => file.name === newFile.name)) {
+      setError('A file with this name already exists');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+
     const updatedFiles = [...files, newFile];
-    setFiles(updatedFiles);
-    localStorage.setItem('flashNotes', JSON.stringify(updatedFiles));
-    setSelectedFile(newFile); // Automatically select newly uploaded file
-    setError('');
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedFiles));
+      setFiles(updatedFiles);
+      setSelectedFile(newFile);
+      setError('');
+    } catch (error) {
+      console.error('Error saving to localStorage:', error);
+      setError('Failed to save file. Storage might be full.');
+      setTimeout(() => setError(''), 3000);
+    }
   };
 
   const handleFileSelect = (file: FileData) => {
     setSelectedFile(file);
   };
+
+  const handleFileDelete = (fileToDelete: FileData) => {
+    const updatedFiles = files.filter(file => file.name !== fileToDelete.name);
+    setFiles(updatedFiles);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedFiles));
+    
+    if (selectedFile?.name === fileToDelete.name) {
+      setSelectedFile(updatedFiles[0] || undefined);
+    }
+
+    if (updatedFiles.length === 0) {
+      router.push('/');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -49,6 +97,7 @@ export default function DashboardContent() {
         selectedFile={selectedFile}
         onFileSelect={handleFileSelect}
         onFileUpload={handleFileUpload}
+        onFileDelete={handleFileDelete}
         error={error}
       />
       <MainContent selectedFile={selectedFile} />
