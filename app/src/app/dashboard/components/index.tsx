@@ -100,7 +100,11 @@ export default function DashboardContent() {
         onFileDelete={handleFileDelete}
         error={error}
       />
-      <MainContent selectedFile={selectedFile} />
+
+
+      <div className="flex-grow overflow-y-auto">
+        <MainContent selectedFile={selectedFile} />
+      </div>
     </div>
   );
 }
