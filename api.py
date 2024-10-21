@@ -17,7 +17,7 @@ from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import Document, AIMessage, HumanMessage, SystemMessage
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate, AIMessagePromptTemplate
-from utils import DocumentReader
+from utils import DocumentReader, parse_json
 
 chat_model: Optional[ChatOllama] = None
 embeddings: Optional[OllamaEmbeddings] = None
@@ -235,6 +235,52 @@ async def chat(message: ChatMessage):
         )
     except Exception as e:
         print(f"Error in chat endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/generate_quiz")
+async def get_summary(document: DocumentInput):
+    """Get a summary of a document"""
+    try:
+        system_prompt = "You are an expert assistant that creates multiple-choice questions (MCQs) from provided reference material. Extract key information and generate five MCQs, each with one correct answer and three incorrect options."
+
+        user_prompt = f"""
+        Please create five multiple-choice questions from the reference text in JSON format. Each question should have one correct answer and three incorrect options. Use the following structure:
+
+        [
+            {{
+                "question": "Question 1 text...",
+                "options": ["Option A", "Option B", "Option C", "Option D"],
+                "correct_option": "Option A"
+            }}
+        ]
+
+        ### Example Output:
+
+        [
+            {{
+                "question": "What is the capital of France?",
+                "options": ["Berlin", "Madrid", "Paris", "Rome"],
+                "correct_option": "Paris"
+            }}
+        ]
+
+        Ensure that the questions are clear and concise, and that options are straightforward without excessive detail or ambiguity.
+
+        Text:
+        {DocumentInput.content}
+        """
+
+        full_prompt = f'''<|im_start|>system
+        {system_prompt}<|im_end|>
+        <|im_start|>user
+        {user_prompt}<|im_end|>
+        <|im_start|>assistant
+        '''
+
+        quizzes = chat_model(full_prompt)
+        formatted_quizzes = parse_json(quizzes)
+        return {"quiz": formatted_quizzes}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/conversations/{conversation_id}")
