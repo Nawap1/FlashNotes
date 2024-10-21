@@ -12,11 +12,12 @@ from langchain_community.chat_models import ChatOllama
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.callbacks import StreamingStdOutCallbackHandler
-from langchain.text_splitter import CharacterTextSplitter
+from langchain.text_splitter import CharacterTextSplitter, TokenTextSplitter
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import Document, AIMessage, HumanMessage, SystemMessage
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate, AIMessagePromptTemplate
+from langchain.chains.summarize import load_summarize_chain
 from utils import DocumentReader, parse_json
 
 chat_model: Optional[ChatOllama] = None
@@ -238,49 +239,112 @@ async def chat(message: ChatMessage):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/generate_quiz")
-async def get_summary(document: DocumentInput):
-    """Get a summary of a document"""
+async def quiz(document: DocumentInput):
+    """Generate quiz questions from a document"""
     try:
-        system_prompt = "You are an expert assistant that creates multiple-choice questions (MCQs) from provided reference material. Extract key information and generate five MCQs, each with one correct answer and three incorrect options."
-
-        user_prompt = f"""
-        Please create five multiple-choice questions from the reference text in JSON format. Each question should have one correct answer and three incorrect options. Use the following structure:
-
-        [
-            {{
-                "question": "Question 1 text...",
-                "options": ["Option A", "Option B", "Option C", "Option D"],
-                "correct_option": "Option A"
-            }}
-        ]
-
-        ### Example Output:
-
-        [
-            {{
-                "question": "What is the capital of France?",
-                "options": ["Berlin", "Madrid", "Paris", "Rome"],
-                "correct_option": "Paris"
-            }}
-        ]
-
-        Ensure that the questions are clear and concise, and that options are straightforward without excessive detail or ambiguity.
-
-        Text:
-        {DocumentInput.content}
-        """
-
-        full_prompt = f'''<|im_start|>system
-        {system_prompt}<|im_end|>
+        prompt = f"""<|im_start|>system
+        You are an expert at creating multiple choice questions. Generate questions based on the given text and return them in JSON format only.
+        <|im_end|>
         <|im_start|>user
-        {user_prompt}<|im_end|>
-        <|im_start|>assistant
-        '''
+        Create 5 multiple choice questions from this text. Return only a JSON array with no additional text or explanation.
+        Each question must have these exact fields: "question", "options" (array of 4 choices), and "correct_option".
 
-        quizzes = chat_model(full_prompt)
-        formatted_quizzes = parse_json(quizzes)
-        return {"quiz": formatted_quizzes}
+        Text to analyze: {document.content}
+        <|im_end|>
+        <|im_start|>assistant
+        [
+            {{
+                "question": "What is Python?",
+                "options": ["A programming language", "An operating system", "A web browser", "A database"],
+                "correct_option": "A programming language"
+            }}
+        ]<|im_end|>
+        <|im_start|>user
+        Please generate 5 questions, not just one. Use the same JSON format.
+        <|im_end|>
+        <|im_start|>assistant"""
+
+        # Get response from the model
+        response = chat_model.invoke(prompt)
+        
+        # Extract JSON from the response
+        content = response.content
+        
+        # Find JSON array within the response
+        start_idx = content.find('[')
+        end_idx = content.rfind(']') + 1
+        
+        if start_idx != -1 and end_idx != -1:
+            json_str = content[start_idx:end_idx]
+            formatted_quizzes = parse_json(json_str)
+            return {"quiz": formatted_quizzes}
+        else:
+            raise ValueError("Could not find valid JSON array in response")
+            
     except Exception as e:
+        print(f"Error in quiz generation: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/summarize")
+async def summary(document: DocumentInput):
+    """Generate a summary of the document"""
+    try:
+        text_splitter = TokenTextSplitter(chunk_size=10000, chunk_overlap=200)
+        texts = text_splitter.split_text(document.content)
+        docs = [Document(page_content=t) for t in texts]
+
+        map_template = """<|im_start|>system
+        You are an AI assistant specialized in understanding and concisely describing content.
+        <|im_end|>
+        <|im_start|>user
+        Please describe the main ideas in the following content:
+        {text}
+        Provide a brief description of the key points.
+        <|im_end|>
+        <|im_start|>assistant
+        """
+        map_prompt = ChatPromptTemplate.from_template(map_template)
+
+        refine_template = """<|im_start|>system
+        You are an AI assistant specialized in creating concise descriptions of content.
+        <|im_end|>
+        <|im_start|>user
+        Here's what we know about the content so far:
+        {existing_answer}
+        We have some new information to add:
+        {text}
+        Please incorporate this new information and create a single, concise paragraph that captures the main ideas of the entire content. Follow these guidelines:
+        1. Focus on the most important information and key takeaways.
+        2. Keep the paragraph brief, ideally 3-4 sentences.
+        3. Present the information directly without mentioning that it's a description.
+        4. Write in a clear, straightforward style.
+        5. Avoid using meta-language or referring to the writing process.
+        <|im_end|>
+        <|im_start|>assistant
+        """
+        refine_prompt = ChatPromptTemplate.from_template(refine_template)
+
+        summarize_chain = load_summarize_chain(
+            chat_model,
+            chain_type="refine",
+            question_prompt=map_prompt,
+            refine_prompt=refine_prompt,
+            return_intermediate_steps=True,
+            input_key="input_documents",
+            output_key="output_text",
+            verbose=True
+        )
+
+        # Run the summarization chain
+        response = summarize_chain.invoke({"input_documents": docs})
+
+        # Extract the summary from the response
+        summary = response['output_text'].strip()
+
+        return {"summary": summary}
+
+    except Exception as e:
+        print(f"Error in summary generation: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/conversations/{conversation_id}")
