@@ -5,7 +5,7 @@ import { Sidebar } from '@/app/components/Sidebar';
 import { MainContent } from './MainContent';
 import type { FileData } from '@/types';
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+const MAX_FILE_SIZE = 50 * 1024 * 1024; 
 const STORAGE_KEY = 'flashNotes';
 
 export default function DashboardContent() {
