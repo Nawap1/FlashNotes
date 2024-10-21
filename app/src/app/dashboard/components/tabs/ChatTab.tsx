@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { api } from '@/app/services/api';
+import { api } from '../../../services/api';
 import ReactMarkdown from 'react-markdown';
 import type { FileData } from '@/types';
 
@@ -24,7 +24,13 @@ export const ChatTab: React.FC<ChatTabProps> = ({ selectedFile }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !selectedFile?.conversationId) return;
+    
+    // Validate input and selected file
+    if (!input.trim()) return;
+    if (!selectedFile?.conversationId) {
+      setError('No file selected for chat');
+      return;
+    }
     
     const userMessage = input.trim();
     setInput('');
@@ -36,16 +42,12 @@ export const ChatTab: React.FC<ChatTabProps> = ({ selectedFile }) => {
     
     setIsLoading(true);
     try {
-      // Format message with tokens for the API
-      const formattedMessage = `<|im_start|>user\n${userMessage}<|im_end|>`;
-      const response = await api.chat(formattedMessage, selectedFile.conversationId);
-      
-      // Clean the response if it still contains tokens
-      const cleanedResponse = response.answer.replace(/<\|im_start\|>assistant\n/, '').replace(/<\|im_end\|>/, '').trim();
+      // Call the chat API
+      const response = await api.chat(userMessage, selectedFile.conversationId);
       
       const newAssistantMessage: Message = {
         role: 'assistant',
-        content: cleanedResponse,
+        content: response.answer,
         sources: response.sources
       };
       
