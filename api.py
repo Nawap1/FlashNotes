@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 import os
-import time
 import shutil
 from typing import List, Optional, Dict
 from fastapi import FastAPI, HTTPException, UploadFile, File
@@ -8,37 +7,40 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+from langchain_core.callbacks import CallbackManager, StreamingStdOutCallbackHandler
 from langchain_community.chat_models import ChatOllama
+from langchain.chains.summarize import load_summarize_chain
+from langchain.text_splitter import CharacterTextSplitter, TokenTextSplitter
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_chroma import Chroma
-from langchain_core.callbacks import StreamingStdOutCallbackHandler
-from langchain.text_splitter import CharacterTextSplitter, TokenTextSplitter
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
-from langchain.schema import Document, AIMessage, HumanMessage, SystemMessage
+from langchain.schema import Document, AIMessage, HumanMessage
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate, AIMessagePromptTemplate
-from langchain.chains.summarize import load_summarize_chain
-from utils import DocumentReader, parse_json
-
+from utils import parse_json
+import time
+import asyncio
+import sqlite3
+from utils import DocumentReader
+# Global variables for single conversation
 chat_model: Optional[ChatOllama] = None
 embeddings: Optional[OllamaEmbeddings] = None
-vector_stores: Dict[str, Chroma] = {}  # Map conversation_id to vector store
-conversation_chains: Dict[str, ConversationalRetrievalChain] = {}
+vector_store: Optional[Chroma] = None
+conversation_chain: Optional[ConversationalRetrievalChain] = None
 PERSIST_DIRECTORY = "./db"
 
 class ChatMessage(BaseModel):
     query: str
-    conversation_id: str = "default"
 
 class ChatResponse(BaseModel):
     answer: str
-    conversation_id: str
     sources: List[str]
 
 class DocumentInput(BaseModel):
     content: str
     metadata: Optional[Dict] = None
 
+# Initialize functions remain the same
 def initialize_chat_ollama():
     return ChatOllama(
         base_url="http://localhost:11434",
@@ -52,67 +54,15 @@ def initialize_embeddings():
         model="qwen3"
     )
 
-def get_or_create_vector_store(conversation_id: str) -> Chroma:
-    """Get or create a vector store for a specific conversation"""
-    if conversation_id not in vector_stores:
-        persist_path = os.path.join(PERSIST_DIRECTORY, conversation_id)
-        vector_stores[conversation_id] = Chroma(
-            embedding_function=embeddings,
-            collection_name=f"chatbot_docs_{conversation_id}",
-            persist_directory=persist_path
-        )
-    return vector_stores[conversation_id]
+def initialize_vector_store() -> Chroma:
+    """Initialize a single vector store"""
+    return Chroma(
+        embedding_function=embeddings,
+        collection_name="chatbot_docs",
+        persist_directory=PERSIST_DIRECTORY
+    )
 
-def handle_remove_error(func, path, exc_info):
-    """Handle the PermissionError when a file is in use"""
-    if not os.access(path, os.W_OK):
-        time.sleep(1)
-        func(path)
-
-def clear_conversation_data(conversation_id: str):
-    """Clear all data associated with a conversation and close Chroma connections"""
-    if conversation_id in conversation_chains:
-        del conversation_chains[conversation_id]
-
-    if conversation_id in vector_stores:
-        vector_store = vector_stores[conversation_id]
-        vector_store._persist_client.close()  # Ensure the connection to the database is closed
-
-        vector_store.delete_collection()
-        del vector_stores[conversation_id]
-
-    persist_path = os.path.join(PERSIST_DIRECTORY, conversation_id)
-    if os.path.exists(persist_path):
-        shutil.rmtree(persist_path, onerror=handle_remove_error)
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global chat_model, embeddings
-    
-    chat_model = initialize_chat_ollama()
-    embeddings = initialize_embeddings()
-    
-    os.makedirs(PERSIST_DIRECTORY, exist_ok=True)
-    
-    yield  
-    
-    for conversation_id in list(vector_stores.keys()):
-        clear_conversation_data(conversation_id)  # Ensure conversation data is cleaned up
-
-    if os.path.exists(PERSIST_DIRECTORY):
-        shutil.rmtree(PERSIST_DIRECTORY, onerror=handle_remove_error)
-
-app = FastAPI(title="Flash Notes Bot", lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-def create_rag_chain_with_memory(vector_store: Chroma, conversation_id: str) -> ConversationalRetrievalChain:
+def create_rag_chain_with_memory(vector_store: Chroma) -> ConversationalRetrievalChain:
     """Create a RAG chain with conversation memory"""
     system_message = SystemMessagePromptTemplate.from_template(
         "<|im_start|>system\nYou are a helpful AI assistant that provides clear and concise information based on the given context and chat history.<|im_end|>"
@@ -140,9 +90,7 @@ def create_rag_chain_with_memory(vector_store: Chroma, conversation_id: str) -> 
 
     return ConversationalRetrievalChain.from_llm(
         llm=chat_model,
-        retriever=vector_store.as_retriever(
-            search_kwargs={"k": 3} 
-        ),
+        retriever=vector_store.as_retriever(search_kwargs={"k": 3}),
         memory=memory,
         combine_docs_chain_kwargs={"prompt": chat_prompt},
         chain_type="stuff",
@@ -151,7 +99,6 @@ def create_rag_chain_with_memory(vector_store: Chroma, conversation_id: str) -> 
         rephrase_question=False,
         verbose=True
     )
-
 def format_chat_history(chat_history, max_messages=5):
     """Only keep the last 'max_messages' to avoid long token sequences."""
     truncated_history = chat_history[-max_messages:]
@@ -164,22 +111,102 @@ def format_chat_history(chat_history, max_messages=5):
     return "\n".join(formatted_history)
 
 
+async def safe_delete_database():
+    """Safely delete the database files with retries"""
+    max_retries = 5
+    retry_delay = 1  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            # First try to close any open connections
+            try:
+                db_path = os.path.join(PERSIST_DIRECTORY, "chroma.sqlite3")
+                if os.path.exists(db_path):
+                    # Try to open and immediately close the database
+                    conn = sqlite3.connect(db_path)
+                    conn.close()
+            except sqlite3.Error:
+                pass  # Ignore any SQLite errors here
+            
+            # Delete the collection first
+            if vector_store:
+                vector_store.delete_collection()
+                # Small delay after deleting collection
+                await asyncio.sleep(0.5)
+            
+            # Try to remove the directory
+            if os.path.exists(PERSIST_DIRECTORY):
+                # On Windows, sometimes we need to make a few attempts
+                for _ in range(3):
+                    try:
+                        shutil.rmtree(PERSIST_DIRECTORY)
+                        break
+                    except PermissionError:
+                        await asyncio.sleep(0.5)
+            return True
+        except Exception as e:
+            if attempt == max_retries - 1:
+                print(f"Failed to delete database after {max_retries} attempts: {str(e)}")
+                return False
+            await asyncio.sleep(retry_delay)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global chat_model, embeddings, vector_store, conversation_chain
+    
+    # Startup
+    chat_model = initialize_chat_ollama()
+    embeddings = initialize_embeddings()
+    vector_store = initialize_vector_store()
+    conversation_chain = create_rag_chain_with_memory(vector_store)
+    
+    os.makedirs(PERSIST_DIRECTORY, exist_ok=True)
+    
+    try:
+        yield
+    finally:
+        # Shutdown
+        # First, clear any active conversations or references
+        conversation_chain = None
+        
+        # Then attempt database cleanup
+        success = await safe_delete_database()
+        if not success:
+            print("Warning: Could not completely clean up database files")
+
+app = FastAPI(title="Flash Notes Bot", lifespan=lifespan)
+
+# CORS middleware remains the same
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.post("/add_document")
 async def add_document(document: DocumentInput):
     """Add a document to the vector store"""
     try:
-        conversation_id = document.metadata.get("conversation_id", "default")
-        clear_conversation_data(conversation_id)
-        vector_store = get_or_create_vector_store(conversation_id)
+        global vector_store, conversation_chain
+        
+        # Clear existing data
+        if vector_store:
+            vector_store.delete_collection()
+            vector_store = initialize_vector_store()
+            conversation_chain = create_rag_chain_with_memory(vector_store)
         
         doc = Document(page_content=document.content, metadata=document.metadata or {})
         text_splitter = CharacterTextSplitter(
-            chunk_size=1000,  
-            chunk_overlap=100,  
+            chunk_size=1000,
+            chunk_overlap=100,
             separator="\n"
         )
         docs = text_splitter.split_documents([doc])
-        vector_store.add_documents(docs)        
+        vector_store.add_documents(docs)
+        
         return {"message": "Document added successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -210,16 +237,10 @@ async def extract_text(file: UploadFile = File(...)):
 async def chat(message: ChatMessage):
     """Chat with the RAG chatbot"""
     try:
-        vector_store = get_or_create_vector_store(message.conversation_id)
+        if not conversation_chain:
+            raise HTTPException(status_code=400, detail="No document loaded")
         
-        if message.conversation_id not in conversation_chains:
-            conversation_chains[message.conversation_id] = create_rag_chain_with_memory(
-                vector_store, message.conversation_id
-            )
-        
-        chain = conversation_chains[message.conversation_id]
-        
-        response = chain({"question": message.query})
+        response = conversation_chain({"question": message.query})
         
         answer = response.get("answer", "I couldn't find an answer.")
         clean_answer = answer.replace("<|im_start|>assistant\n", "").replace("<|im_end|>", "").strip()
@@ -231,7 +252,6 @@ async def chat(message: ChatMessage):
         
         return ChatResponse(
             answer=clean_answer,
-            conversation_id=message.conversation_id,
             sources=sources
         )
     except Exception as e:
@@ -346,15 +366,3 @@ async def summary(document: DocumentInput):
     except Exception as e:
         print(f"Error in summary generation: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/conversations/{conversation_id}")
-async def delete_conversation(conversation_id: str):
-    """Delete a conversation and its associated data"""
-    try:
-        clear_conversation_data(conversation_id)
-        return {"message": f"Conversation {conversation_id} deleted successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="localhost", port=8000)
