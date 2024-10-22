@@ -5,7 +5,6 @@ export interface FileData {
   content: any;
   size: number;
   extractedText: string;
-  conversationId: string;
 }
 
 export interface DocumentInput {
@@ -15,11 +14,9 @@ export interface DocumentInput {
 
 export interface ChatMessage {
   query: string;
-  conversation_id: string;
 }
 
 export interface ChatResponse {
   answer: string;
-  conversation_id: string;
   sources: string[];
 }

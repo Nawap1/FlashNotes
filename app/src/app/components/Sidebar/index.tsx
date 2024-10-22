@@ -1,3 +1,4 @@
+// src/app/components/Sidebar/index.tsx
 import React from 'react';
 import { FileUploadButton } from '../FileUploadButton';
 import { FileList } from './FileList';

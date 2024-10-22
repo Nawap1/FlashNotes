@@ -68,11 +68,11 @@ export const MainContent: React.FC<MainContentProps> = ({ selectedFile }) => {
           <ChatTab selectedFile={selectedFile} />
         </TabsContent>
         <TabsContent value="summary">
-          <SummaryTab />
-        </TabsContent>
-        <TabsContent value="quiz">
-          <QuizTab />
-        </TabsContent>
+        <SummaryTab selectedFile={selectedFile} />
+      </TabsContent>
+      <TabsContent value="quiz">
+        <QuizTab selectedFile={selectedFile} />
+      </TabsContent>
       </Tabs>
     </div>
   );

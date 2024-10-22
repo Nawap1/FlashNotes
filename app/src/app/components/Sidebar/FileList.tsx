@@ -1,3 +1,4 @@
+// src/app/components/Sidebar/FileList.tsx
 import { File } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import type { FileData } from '@/types';

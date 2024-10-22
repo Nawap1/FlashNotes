@@ -27,11 +27,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({ selectedFile }) => {
     
     // Validate input and selected file
     if (!input.trim()) return;
-    if (!selectedFile?.conversationId) {
-      setError('No file selected for chat');
-      return;
-    }
-    
+
     const userMessage = input.trim();
     setInput('');
     setError(null);
@@ -43,7 +39,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({ selectedFile }) => {
     setIsLoading(true);
     try {
       // Call the chat API
-      const response = await api.chat(userMessage, selectedFile.conversationId);
+      const response = await api.chat(userMessage);
       
       const newAssistantMessage: Message = {
         role: 'assistant',

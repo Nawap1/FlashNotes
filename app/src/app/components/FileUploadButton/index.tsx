@@ -1,3 +1,4 @@
+//src/app/components/FileUploadButton/index.tsx
 "use client";
 import React, { useRef, useState } from 'react';
 import { Upload, AlertCircle } from 'lucide-react';
@@ -46,18 +47,13 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
       setIsLoading(true);
       
       try {
-        // Generate a unique conversation ID
-        const conversationId = `conv_${Math.random().toString(36).substring(2, 15)}`;
-        
         // Extract text from the document
         const extractedText = await api.extractText(file);
         
-        // Add document to vector store with conversation ID
         await api.addDocument(extractedText, {
           filename: file.name,
           type: file.type,
           timestamp: new Date().toISOString(),
-          conversation_id: conversationId,
           page: 1  // Add page number if available
         });
 
@@ -69,7 +65,6 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
           content: extractedText,
           size: file.size,
           extractedText,
-          conversationId,
         };
         
         onFileUpload(newFile);

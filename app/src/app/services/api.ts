@@ -9,12 +9,10 @@ interface DocumentInput {
 
 interface ChatMessage {
   query: string;
-  conversation_id: string;
 }
 
 interface ChatResponse {
   answer: string;
-  conversation_id: string;
   sources: string[];
 }
 
@@ -78,45 +76,59 @@ export const api = {
 
   async addDocument(content: string, metadata: Record<string, any>): Promise<void> {
     try {
+      // Ensure content is not empty or just whitespace
       if (!content || content.trim().length === 0) {
         throw new APIError('Document content cannot be empty');
       }
-
-      if (!metadata?.conversation_id) {
-        throw new APIError('Conversation ID is required');
-      }
-
+  
+      // Construct the document with necessary formatting
       const document: DocumentInput = {
         content: content.trim(),
         metadata: {
-          ...metadata,
-          timestamp: new Date().toISOString(),
+          source: metadata?.source || `document_${Date.now()}.txt`, // Use current timestamp if no source is provided
+          ...metadata, // Spread any additional metadata provided
         }
       };
-
+  
+      // Send the document via POST request
       await axiosInstance.post('/add_document', document);
+      
     } catch (error) {
       console.error('[addDocument Error]', error);
+  
+      if (axios.isAxiosError(error)) {
+        const serverErrorDetail = error.response?.data?.detail;
+        const serverErrorStatus = error.response?.status;
+  
+        // Log server error response if available
+        if (error.response?.data) {
+          console.error('Server response:', error.response.data);
+        }
+  
+        throw new APIError(
+          serverErrorDetail || 'Failed to add document to vector store',
+          serverErrorStatus
+        );
+      }
+  
+      // Rethrow API errors without masking them
       if (error instanceof APIError) {
         throw error;
       }
-      throw new APIError('Failed to add document to vector store');
+  
+      // Handle other unexpected errors
+      throw new APIError('An unexpected error occurred while adding the document');
     }
   },
 
-  async chat(query: string, conversationId: string): Promise<ChatResponse> {
+  async chat(query: string): Promise<ChatResponse> {
     try {
       if (!query || query.trim().length === 0) {
         throw new APIError('Query cannot be empty');
       }
 
-      if (!conversationId) {
-        throw new APIError('Conversation ID is required');
-      }
-
       const message: ChatMessage = {
         query: query.trim(),
-        conversation_id: conversationId
       };
 
       const response = await axiosInstance.post<ChatResponse>('/chat', message);
@@ -128,7 +140,6 @@ export const api = {
 
       return {
         answer: response.data.answer,
-        conversation_id: response.data.conversation_id,
         sources: response.data.sources || []
       };
     } catch (error) {
@@ -142,21 +153,7 @@ export const api = {
     }
   },
 
-  async deleteConversation(conversationId: string): Promise<void> {
-    try {
-      if (!conversationId) {
-        throw new APIError('Conversation ID is required');
-      }
 
-      await axiosInstance.delete(`/conversations/${conversationId}`);
-    } catch (error) {
-      console.error('[deleteConversation Error]', error);
-      if (error instanceof APIError) {
-        throw error;
-      }
-      throw new APIError('Failed to delete conversation');
-    }
-  }
 };
 
 export type { ChatResponse, ChatMessage, DocumentInput };

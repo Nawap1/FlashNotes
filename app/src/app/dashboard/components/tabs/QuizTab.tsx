@@ -1,56 +1,85 @@
 import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Brain, CheckCircle, XCircle, RefreshCw, PlayCircle } from 'lucide-react';
+import { Brain, CheckCircle, XCircle, RefreshCw, PlayCircle, AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { api } from '@/app/services/api';
 
-// Dummy JSON
-const dummyJson = [
-  {
-    question: "What technique divides an image into two distinct regions based on intensity values?",
-    options: ["Histogram-based segmentation", "Edge-based segmentation", "Clustering-based segmentation", "Thresholding technique segmentation"],
-    correct_option: "Thresholding technique segmentation"
-  },
-  {
-    question: "Which of the following is NOT a type of region-based segmentation?",
-    options: ["Watershed transformation", "Region growing", "Region split and merge techniques", "Edge detection"],
-    correct_option: "Edge detection"
-  },
-  {
-    question: "What is the main goal of histogram based segmentation?",
-    options: ["To divide an image into two distinct regions (object and background) directly based on intensity values and their properties", "To separate different peaks in the histogram using deep valleys", "To create a binary image by thresholding intensities", "To merge multiple regions into one large area"],
-    correct_option: "To separate different peaks in the histogram using deep valleys"
-  },
-  {
-    question: "What is the significance of edges in edge-based segmentation?",
-    options: ["Edges are significant changes in intensity between objects in an image, and they help identify boundaries", "Edges represent changes in color only, not intensity", "Edges show similarities between different regions in images", "Edges are irrelevant in segmentation processes"],
-    correct_option: "Edges are significant changes in intensity between objects in an image, and they help identify boundaries"
-  },
-  {
-    question: "Which technique segments the image into clusters with pixels having similar characteristics?",
-    options: ["Thresholding technique segmentation", "Clustering-based segmentation", "Region based Segmentation", "Edge-based segmentation"],
-    correct_option: "Clustering-based segmentation"
-  }
-];
-
-export const QuizTab = () => {
+export const QuizTab = ({ selectedFile }) => {
   const [quizStarted, setQuizStarted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [answers, setAnswers] = useState({});
   const [showScore, setShowScore] = useState(false);
   const [score, setScore] = useState(0);
   const [quizData, setQuizData] = useState([]);
+  const [originalQuizData, setOriginalQuizData] = useState([]);
 
-  const shuffleArray = (array) => array.sort(() => Math.random() - 0.5);
+  const shuffleArray = (array) => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
 
-  const startQuiz = () => {
-    const shuffledQuizData = dummyJson.map((question) => ({
+  const randomizeQuiz = (questions) => {
+    return questions.map(question => ({
       ...question,
-      options: shuffleArray([...question.options]),
+      options: shuffleArray(question.options)
     }));
-    setQuizData(shuffledQuizData);
-    setQuizStarted(true);
+  };
+
+  const resetQuizState = () => {
     setAnswers({});
     setShowScore(false);
     setScore(0);
+  };
+
+  const resetAllState = () => {
+    setQuizStarted(false);
+    setAnswers({});
+    setShowScore(false);
+    setScore(0);
+    setQuizData([]);
+    setOriginalQuizData([]);
+  };
+
+  const generateAndStartQuiz = async () => {
+    if (!selectedFile?.content) {
+      setError('Please select a file to generate quiz questions');
+      return;
+    }
+
+    resetAllState();
+    setLoading(true);
+    setError('');
+
+    try {
+      await api.addDocument(selectedFile.content, {
+        source: selectedFile.name || 'document.txt'
+      });
+      
+      const response = await fetch('http://localhost:8000/generate_quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: selectedFile.content
+        })
+      });
+
+      const data = await response.json();
+      const randomizedQuestions = shuffleArray(data.quiz);
+      setOriginalQuizData(data.quiz);
+      setQuizData(randomizedQuestions);
+      setQuizStarted(true);
+    } catch (err) {
+      setError('Failed to generate quiz questions. Please try again.');
+      console.error('Quiz generation error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAnswerSelect = (questionIndex, option) => {
@@ -71,30 +100,74 @@ export const QuizTab = () => {
     setShowScore(true);
   };
 
+  const handleRetake = () => {
+    const shuffledQuestions = shuffleArray([...originalQuizData]);
+    const randomizedQuiz = randomizeQuiz(shuffledQuestions);
+    setQuizData(randomizedQuiz);
+    resetQuizState();
+  };
+
+  const handleGenerateNew = () => {
+    resetAllState();
+    generateAndStartQuiz();
+  };
+
+  const renderInitialView = () => (
+    <div className="text-center py-8">
+      <div className="bg-gray-50 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4">
+        <Brain className="w-7 h-7 text-gray-600" />
+      </div>
+      <h2 className="text-xl font-semibold text-gray-800 mb-2">
+        Ready to Test Your Knowledge?
+      </h2>
+      <p className="text-sm text-gray-600 mb-4">
+        Start the quiz to test your understanding of the document
+      </p>
+      <Button 
+        onClick={generateAndStartQuiz}
+        disabled={loading}
+        className="bg-gray-700 hover:bg-gray-800 text-white flex items-center justify-center mx-auto gap-2"
+      >
+        {loading ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Generating Quiz...</span>
+          </>
+        ) : (
+          <>
+            <PlayCircle className="w-4 h-4" />
+            <span>Start Quiz</span>
+          </>
+        )}
+      </Button>
+    </div>
+  );
+
+  if (!selectedFile) {
+    return (
+      <Card className="w-full">
+        <CardContent className="p-6 text-center text-gray-500">
+          <Brain className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+          <p>Select a document to start a quiz</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="w-full px-4">
       <Card className="bg-white shadow-lg border-gray-100">
         <CardContent className="p-6">
-          {!quizStarted ? (
-            <div className="text-center py-8">
-              <div className="bg-gray-50 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Brain className="w-7 h-7 text-gray-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-800 mb-2">
-                Ready to Test Your Knowledge?
-              </h2>
-              <p className="text-sm text-gray-600 mb-4">
-                Start the quiz to challenge yourself and learn more
-              </p>
-              <Button 
-                onClick={startQuiz}
-                className="bg-gray-700 hover:bg-gray-800 text-white flex items-center justify-center mx-auto gap-2"
-              >
-                <PlayCircle className="w-4 h-4" />
-                <span className="text-sm">Start Quiz</span>
-              </Button>
-            </div>
-          ) : (
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {!quizStarted && renderInitialView()}
+
+          {quizStarted && (
             <div>
               {!showScore ? (
                 <>
@@ -109,10 +182,7 @@ export const QuizTab = () => {
                         </h3>
                         <div className="space-y-2 ml-7">
                           {question.options.map((option, optionIndex) => (
-                            <div 
-                              key={optionIndex}
-                              className="flex items-center"
-                            >
+                            <div key={optionIndex} className="flex items-center">
                               <label className="flex items-center space-x-3 w-full p-2 rounded-md hover:bg-gray-100 cursor-pointer transition-colors">
                                 <input
                                   type="radio"
@@ -135,7 +205,7 @@ export const QuizTab = () => {
                       onClick={checkAnswers}
                       className="bg-gray-700 hover:bg-gray-800 text-white px-6"
                     >
-                      <span className="text-sm">Submit Answers</span>
+                      Submit Answers
                     </Button>
                   </div>
                 </>
@@ -205,13 +275,20 @@ export const QuizTab = () => {
                     ))}
                   </div>
 
-                  <div className="mt-6 text-center">
+                  <div className="mt-6 flex justify-center space-x-4">
                     <Button 
-                      onClick={startQuiz}
+                      onClick={handleRetake}
                       className="bg-gray-700 hover:bg-gray-800 text-white flex items-center gap-2"
                     >
                       <RefreshCw className="w-4 h-4" />
-                      <span className="text-sm">Try Again</span>
+                      <span>Retake Quiz</span>
+                    </Button>
+                    <Button 
+                      onClick={handleGenerateNew}
+                      className="bg-gray-700 hover:bg-gray-800 text-white flex items-center gap-2"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>Generate New Quiz</span>
                     </Button>
                   </div>
                 </div>
@@ -223,3 +300,5 @@ export const QuizTab = () => {
     </div>
   );
 };
+
+export default QuizTab;
