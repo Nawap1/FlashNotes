@@ -39,7 +39,7 @@ export const LandingContent: React.FC<LandingContentProps> = ({ onFileUpload }) 
             </div>
             <h3 className="text-white text-lg font-semibold mb-2">Learn</h3>
             <p className="text-gray-400 text-sm">Interactive learning experience</p>
-            <p className="text-gray-400 text-sm">Chat bla bla bla ..</p>
+            <p className="text-gray-400 text-sm">Chat</p>
           </div>
           <div className="bg-gray-900 p-6 rounded-lg text-center">
             <div className="bg-gray-800 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4">
