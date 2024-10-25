@@ -9,7 +9,7 @@ interface LandingContentProps {
 export const LandingContent: React.FC<LandingContentProps> = ({ onFileUpload }) => (
   <div className="min-h-screen bg-black">
     {/* Top decorative bar */}
-    {/* <div className="h-2 bg-gradient-to-r from-gray-700 via-gray-500 to-gray-700" /> */}
+    <div className="h-2 bg-gradient-to-r from-gray-700 via-gray-500 to-gray-700" />
     
     <div className="container mx-auto px-4 py-16">
       <div className="max-w-6xl mx-auto">
@@ -77,7 +77,7 @@ export const LandingContent: React.FC<LandingContentProps> = ({ onFileUpload }) 
     </div>
     
     {/* Bottom decorative bar */}
-    {/* <div className="h-2 bg-gradient-to-r from-gray-700 via-gray-500 to-gray-700" /> */}
+    <div className="h-2 bg-gradient-to-r from-gray-700 via-gray-500 to-gray-700" />
   </div>
 );
 
