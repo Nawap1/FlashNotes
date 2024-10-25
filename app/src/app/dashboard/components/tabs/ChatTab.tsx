@@ -1,3 +1,4 @@
+// src/app/dashboard/components/tabs/ChatTab.tsx
 import { useState } from 'react';
 import { Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';

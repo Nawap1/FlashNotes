@@ -1,16 +1,16 @@
-// src/app/components/Sidebar/index.tsx
 import React from 'react';
 import { FileUploadButton } from '../FileUploadButton';
 import { FileList } from './FileList';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Trash2, FolderUp } from 'lucide-react';
 import type { FileData } from '@/types';
+import { dbService } from '@/app/services/db';
 
 interface SidebarProps {
   files: FileData[];
   selectedFile?: FileData;
   onFileSelect: (file: FileData) => void;
-  onFileUpload: (file: FileData) => void;
+  onFileUpload: (file: Omit<FileData, 'id'>) => void;
   onFileDelete: (file: FileData) => void;
   error: string;
 }
@@ -23,8 +23,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onFileDelete,
   error
 }) => {
-  const handleClearAll = () => {
-    files.forEach(file => onFileDelete(file));
+  const handleClearAll = async () => {
+    for (const file of files) {
+      if (file.id) {
+        await dbService.deleteFile(file.id);
+        onFileDelete(file);
+      }
+    }
   };
 
   return (
@@ -94,5 +99,3 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </div>
   );
 };
-
-export default Sidebar;

@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/app/components/Sidebar';
 import { MainContent } from './MainContent';
+import { dbService } from '@/app/services/db';
 import type { FileData } from '@/types';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; 
-const STORAGE_KEY = 'flashNotes';
 
 export default function DashboardContent() {
   const [files, setFiles] = useState<FileData[]>([]);
@@ -16,51 +16,54 @@ export default function DashboardContent() {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  // Load files from localStorage
+  // Load files from IndexedDB
   useEffect(() => {
-    try {
-      const savedFiles = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-      setFiles(savedFiles);
-      
-      // If there are files, select the first one
-      if (savedFiles.length > 0) {
-        setSelectedFile(savedFiles[0]);
-      } else {
-        // Only redirect if there are no files and we're done loading
+    const loadFiles = async () => {
+      try {
+        const savedFiles = await dbService.getFiles();
+        setFiles(savedFiles);
+        
+        // If there are files, select the first one
+        if (savedFiles.length > 0) {
+          setSelectedFile(savedFiles[0]);
+        } else {
+          // Only redirect if there are no files and we're done loading
+          router.push('/');
+        }
+      } catch (error) {
+        console.error('Error loading files from IndexedDB:', error);
+        setFiles([]);
         router.push('/');
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error('Error loading files from localStorage:', error);
-      localStorage.removeItem(STORAGE_KEY);
-      setFiles([]);
-      router.push('/');
-    } finally {
-      setIsLoading(false);
-    }
+    };
+
+    loadFiles();
   }, [router]);
 
-  const handleFileUpload = (newFile: FileData) => {
+  const handleFileUpload = async (newFile: Omit<FileData, 'id'>) => {
     if (newFile.size > MAX_FILE_SIZE) {
-      setError('File size exceeds 10MB limit');
+      setError('File size exceeds 50MB limit');
       setTimeout(() => setError(''), 3000);
       return;
     }
     
-    if (files.some(file => file.name === newFile.name)) {
+    if (files.some(file => file.title === newFile.title)) {
       setError('A file with this name already exists');
       setTimeout(() => setError(''), 3000);
       return;
     }
 
-    const updatedFiles = [...files, newFile];
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedFiles));
-      setFiles(updatedFiles);
-      setSelectedFile(newFile);
+      const [id] = await dbService.addFiles([newFile]);
+      const fileWithId = { ...newFile, id };
+      setFiles(prev => [...prev, fileWithId]);
+      setSelectedFile(fileWithId);
       setError('');
     } catch (error) {
-      console.error('Error saving to localStorage:', error);
-      setError('Failed to save file. Storage might be full.');
+      console.error('Error saving to IndexedDB:', error);
+      setError('Failed to save file. Database error occurred.');
       setTimeout(() => setError(''), 3000);
     }
   };
@@ -69,17 +72,25 @@ export default function DashboardContent() {
     setSelectedFile(file);
   };
 
-  const handleFileDelete = (fileToDelete: FileData) => {
-    const updatedFiles = files.filter(file => file.name !== fileToDelete.name);
-    setFiles(updatedFiles);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedFiles));
-    
-    if (selectedFile?.name === fileToDelete.name) {
-      setSelectedFile(updatedFiles[0] || undefined);
-    }
+  const handleFileDelete = async (fileToDelete: FileData) => {
+    try {
+      if (fileToDelete.id) {
+        await dbService.deleteFile(fileToDelete.id);
+        const updatedFiles = files.filter(file => file.id !== fileToDelete.id);
+        setFiles(updatedFiles);
+        
+        if (selectedFile?.id === fileToDelete.id) {
+          setSelectedFile(updatedFiles[0] || undefined);
+        }
 
-    if (updatedFiles.length === 0) {
-      router.push('/');
+        if (updatedFiles.length === 0) {
+          router.push('/');
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      setError('Failed to delete file');
+      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -101,7 +112,6 @@ export default function DashboardContent() {
         onFileDelete={handleFileDelete}
         error={error}
       />
-
 
       <div className="flex-grow overflow-y-auto">
         <MainContent selectedFile={selectedFile} />

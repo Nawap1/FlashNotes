@@ -1,4 +1,4 @@
-//src/app/components/FileUploadButton/index.tsx
+// src/app/components/FileUploadButton/index.tsx
 "use client";
 import React, { useRef, useState } from 'react';
 import { Upload, AlertCircle } from 'lucide-react';
@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { api } from '@/app/services/api';
 import type { FileData } from '@/types';
+import { Progress } from '@/components/ui/progress'; // Make sure to import Progress from shadcn/ui
 
 interface FileUploadButtonProps {
-  onFileUpload: (file: FileData) => void;
+  onFileUpload: (files: FileData[]) => void;
   variant?: "default" | "outline";
   size?: "default" | "icon";
 }
@@ -27,9 +28,13 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [processingFile, setProcessingFile] = useState('');
+
   const handleClick = () => {
     fileInputRef.current?.click();
   };
+
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     const validFiles = files.filter(file => 
@@ -42,11 +47,15 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
     }
 
     setError(null);
-
-    for (const file of validFiles) {
-      setIsLoading(true);
-      
-      try {
+    setIsLoading(true);
+    const processedFiles: FileData[] = [];
+    
+    try {
+      for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i];
+        setProcessingFile(file.name);
+        setProgress((i / validFiles.length) * 100);
+        
         // Extract text from the document
         const extractedText = await api.extractText(file);
         
@@ -54,12 +63,12 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
           filename: file.name,
           type: file.type,
           timestamp: new Date().toISOString(),
-          page: 1  // Add page number if available
+          page: 1
         });
 
         // Create FileData object
         const newFile: FileData = {
-          id: Date.now(),
+          id: Date.now() + i, // Temporary ID, will be replaced by DB
           title: file.name,
           type: ACCEPTED_FILE_TYPES[file.type as keyof typeof ACCEPTED_FILE_TYPES],
           content: extractedText,
@@ -67,18 +76,24 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
           extractedText,
         };
         
-        onFileUpload(newFile);
-
-      } catch (error) {
-        console.error('Error processing file:', error);
-        setError(error instanceof Error ? error.message : 'Error processing file. Please try again.');
-      } finally {
-        setIsLoading(false);
+        processedFiles.push(newFile);
       }
+      
+      setProgress(100);
+      onFileUpload(processedFiles);
+
+    } catch (error) {
+      console.error('Error processing files:', error);
+      setError(error instanceof Error ? error.message : 'Error processing files. Please try again.');
+    } finally {
+      setIsLoading(false);
+      setProgress(0);
+      setProcessingFile('');
     }
     
     event.target.value = '';
   };
+
   return (
     <div className="w-full max-w-md">
       <input
@@ -103,6 +118,15 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
         />
         {isLoading ? 'Processing...' : 'Upload Documents'}
       </Button>
+
+      {isLoading && (
+        <div className="mt-4">
+          <Progress value={progress} className="w-full" />
+          <p className="text-sm text-gray-400 mt-2">
+            Processing: {processingFile}
+          </p>
+        </div>
+      )}
 
       {error && (
         <Alert variant="destructive" className="mt-2">

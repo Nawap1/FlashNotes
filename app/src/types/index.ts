@@ -1,10 +1,12 @@
+export type TabType = "chat"|"summary"|"quiz";
 export interface FileData {
-  id: number;
+  id?: number;
   title: string;
   type: string;
   content: any;
   size: number;
   extractedText: string;
+  timestamp?: string;
 }
 
 export interface DocumentInput {

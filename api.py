@@ -366,3 +366,6 @@ async def summary(document: DocumentInput):
     except Exception as e:
         print(f"Error in summary generation: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+if __name__ == "__main__":
+    uvicorn.run(app, host="localhost", port=8000)
