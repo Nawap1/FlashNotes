@@ -3,17 +3,20 @@
 
 # Flash Notes
 
-Flash Notes is an interactive document assistant that allows users to upload documents (PDF, PPTX, or TXT) and engage with them using Qwen 2.5. With Flash Notes, users can chat with their documents, generate summaries, and create quizzes based on the content, all designed to enhance document comprehension and learning.
+Flash Notes is an interactive document assistant that leverages Retrieval-Augmented Generation (RAG) to enhance user interaction with documents. It allows users to upload documents (PDF, PPTX, or TXT) and engage with them using Qwen 2.5. With Flash Notes, users can chat with their documents, generate summaries, and create quizzes based on the content, all designed to enhance document comprehension and learning.
 
 ## Features
+- **RAG (Retrieval-Augmented Generation)**: Utilizes RAG to improve response relevance by retrieving document-specific context before generating responses.
 - **Chat with Documents**: Ask questions directly about your documents and receive accurate, context-aware responses.
 - **Summarize Content**: Generate concise summaries of key points.
 - **Generate Quizzes**: Automatically create quizzes to test knowledge of the document content.
+
 
 ## Tech Stack
 - **Frontend**: Next.js
 - **Backend**: FastAPI
 - **LLM**: Qwen 2.5 for natural language processing
+- **RAG**: Enhances the LLM’s responses with document-based retrieval
 - **Database**: IndexDB
 
 ---
