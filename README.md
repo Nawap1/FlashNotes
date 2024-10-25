@@ -1,114 +1,128 @@
+
+---
+
 # Flash Notes
 
-Flash Notes is an interactive document assistant that allows users to upload documents (PDF, PPTX, or TXT) and interact with them using Qwen 2.5. With Flash Notes, you can chat with your document, generate concise summaries, and even create quizzes based on the content.
+Flash Notes is an interactive document assistant that allows users to upload documents (PDF, PPTX, or TXT) and engage with them using Qwen 2.5. With Flash Notes, users can chat with their documents, generate summaries, and create quizzes based on the content, all designed to enhance document comprehension and learning.
 
 ## Features
-- **Chat with Documents**: Ask questions about your documents and get accurate responses.
-- **Summarize Content**: Quickly generate summaries to capture key points.
+- **Chat with Documents**: Ask questions directly about your documents and receive accurate, context-aware responses.
+- **Summarize Content**: Generate concise summaries of key points.
 - **Generate Quizzes**: Automatically create quizzes to test knowledge of the document content.
 
 ## Tech Stack
 - **Frontend**: Next.js
 - **Backend**: FastAPI
-- **LLM**: Qwen 2.5 for NLP capabilities
+- **LLM**: Qwen 2.5 for natural language processing
 - **Database**: IndexDB
+
+---
 
 ## Getting Started
 
 ### Prerequisites
-1. **Python 3.8+** for the FastAPI backend.
-2. **Node.js** for the Next.js frontend.
-3. **Ollama** for the LLM deployment
+- **Python 3.8+** for the FastAPI backend
+- **Node.js** for the Next.js frontend
+- **Ollama** for the LLM model deployment
+
 ### Installation
 
-## Setup
-
-### 1. Clone the Repository
+#### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/Nawap1/FlashNotes.git
+cd FlashNotes
 ```
 
-### 2. Download the Quantized Model
+#### 2. Download the Quantized Model
 
-- Navigate to [this link](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf?download=true) and download the **qwen2.5-3b-instruct-q4_k_m.gguf** model.
-- Create a directory `/Model` in the project root and place the downloaded quantized model inside.
+- Download the Qwen 2.5 model from [this link](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf?download=true).
+- Place the downloaded model file in a new directory named `/Model` within the project root.
 
-### 3. Install Ollama
+#### 3. Install Ollama
 
-- Download Ollama from [here](https://ollama.com/).
-- Install Ollama following the provided instructions.
+- Download and install Ollama from [here](https://ollama.com/), following the installation instructions provided.
 
-### 4. Prepare the Model
+#### 4. Prepare the Model
 
-- Copy the downloaded model file into the project directory.
-- Create a file named `Modelfile` in the same directory and paste the following content:
+1. Copy the downloaded model file into the project directory.
+2. Create a file named `Modelfile` in the same directory with the following content:
 
-```text
-FROM qwen2.5-3b-instruct-q4_k_m.gguf
-SYSTEM You are a helpful AI assistant
-# Adjust model parameters
-PARAMETER temperature 0.7
-PARAMETER top_k 40
-PARAMETER top_p 0.95
-```
+   ```text
+   FROM qwen2.5-3b-instruct-q4_k_m.gguf
+   SYSTEM You are a helpful AI assistant
+   # Adjust model parameters
+   PARAMETER temperature 0.7
+   PARAMETER top_k 40
+   PARAMETER top_p 0.95
+   ```
 
-### 5. Create the Ollama Model
+3. Create the Ollama model by running:
 
-Open a terminal and run the following command:
+   ```bash
+   ollama create qwen3 -f Modelfile
+   ```
 
-```bash
-ollama create qwen3 -f Modelfile
-```
-
-### 6. Install Python Dependencies
+#### 5. Install Backend Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Running the API
+---
+
+## Running the Application
+
+### 1. Start the API
 
 1. Navigate to the API directory:
 
-```bash
-cd api
-```
+   ```bash
+   cd api
+   ```
 
-2. Start the API:
+2. Run the API:
 
-```bash
-python api.py
-```
+   ```bash
+   python api.py
+   ```
 
-The API should now be running on `http://localhost:8000`.
+   The API will now be running at `http://localhost:8000`.
 
-## Hosting the YouTube Summarizer App
+### 2. Start the Frontend
 
 1. Navigate to the app directory:
 
-```bash
-cd app
-```
+   ```bash
+   cd app
+   ```
 
 2. Install frontend dependencies:
 
-```bash
-npm install
-```
+   ```bash
+   npm install
+   ```
 
-3. Run the app:
+3. Start the frontend server:
 
-```bash
-npm run dev
-```
+   ```bash
+   npx next dev
+   ```
 
-The app should now be accessible at `http://localhost:3000`.
+   The app should now be accessible at `http://localhost:3000`.
+
+---
 
 ## Usage
 
-1. Open your web browser and go to `http://localhost:3000`.
-2. Upload your documents using the upload button.
-3. Then to chat wait for the documents to load and chat with your documents.
-4. To generate summary, go to the summary tab and press the generate summary button
-5. To generate quiz, go to quiz tab and press the generate quiz button.
+1. Open your browser and go to `http://localhost:3000`.
+2. Use the **Upload** button to upload your documents.
+3. Once loaded, interact with your document in the following ways:
+   - **Chat**: Navigate to the chat section to ask questions about the document.
+   - **Summarize**: Go to the summary tab and click **Generate Summary** for key takeaways.
+   - **Quiz**: Go to the quiz tab and click **Generate Quiz** to create questions based on the document content.
+
+---
+
+## License
+This project is licensed under the MIT License.
