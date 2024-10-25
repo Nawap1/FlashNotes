@@ -100,6 +100,17 @@ export class DBService {
       request.onsuccess = () => resolve();
     });
   }
+  async deleteAllFiles(): Promise<void> {
+    const db = await this.getDB();
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.clear();
+
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
 }
 
 export const dbService = new DBService();

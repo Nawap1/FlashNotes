@@ -1,4 +1,3 @@
-// src/app/dashboard/components/index.tsx
 "use client";
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -7,7 +6,7 @@ import { MainContent } from './MainContent';
 import { dbService } from '@/app/services/db';
 import type { FileData } from '@/types';
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; 
+const MAX_FILE_SIZE = 100 * 1024 * 1024; 
 
 export default function DashboardContent() {
   const [files, setFiles] = useState<FileData[]>([]);
@@ -42,28 +41,44 @@ export default function DashboardContent() {
     loadFiles();
   }, [router]);
 
-  const handleFileUpload = async (newFile: Omit<FileData, 'id'>) => {
-    if (newFile.size > MAX_FILE_SIZE) {
-      setError('File size exceeds 50MB limit');
-      setTimeout(() => setError(''), 3000);
-      return;
-    }
-    
-    if (files.some(file => file.title === newFile.title)) {
-      setError('A file with this name already exists');
-      setTimeout(() => setError(''), 3000);
-      return;
+  const handleFileUpload = async (newFiles: Omit<FileData, 'id'>[]) => {
+    // Validate each file
+    for (const newFile of newFiles) {
+      if (newFile.size > MAX_FILE_SIZE) {
+        setError(`File "${newFile.title}" exceeds 50MB limit`);
+        setTimeout(() => setError(''), 3000);
+        return;
+      }
+      
+      if (files.some(file => file.title === newFile.title)) {
+        setError(`A file named "${newFile.title}" already exists`);
+        setTimeout(() => setError(''), 3000);
+        return;
+      }
     }
 
     try {
-      const [id] = await dbService.addFiles([newFile]);
-      const fileWithId = { ...newFile, id };
-      setFiles(prev => [...prev, fileWithId]);
-      setSelectedFile(fileWithId);
+      // Add all files to IndexedDB at once
+      const newIds = await dbService.addFiles(newFiles);
+      
+      // Create complete FileData objects with the new IDs
+      const filesWithIds = newFiles.map((file, index) => ({
+        ...file,
+        id: newIds[index]
+      }));
+
+      // Update state with all new files
+      setFiles(prev => [...prev, ...filesWithIds]);
+      
+      // Select the first new file if no file is currently selected
+      if (!selectedFile) {
+        setSelectedFile(filesWithIds[0]);
+      }
+      
       setError('');
     } catch (error) {
       console.error('Error saving to IndexedDB:', error);
-      setError('Failed to save file. Database error occurred.');
+      setError('Failed to save files. Database error occurred.');
       setTimeout(() => setError(''), 3000);
     }
   };
@@ -94,6 +109,19 @@ export default function DashboardContent() {
     }
   };
 
+  const handleClearAll = async () => {
+    try {
+      await dbService.deleteAllFiles();
+      setFiles([]);
+      setSelectedFile(undefined);
+      router.push('/');
+    } catch (error) {
+      console.error('Error clearing all files:', error);
+      setError('Failed to clear all files');
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -107,6 +135,7 @@ export default function DashboardContent() {
       <Sidebar 
         files={files} 
         selectedFile={selectedFile}
+        onClearAll={handleClearAll}
         onFileSelect={handleFileSelect}
         onFileUpload={handleFileUpload}
         onFileDelete={handleFileDelete}
@@ -114,7 +143,7 @@ export default function DashboardContent() {
       />
 
       <div className="flex-grow overflow-y-auto">
-        <MainContent selectedFile={selectedFile} files = {files} />
+        <MainContent selectedFile={selectedFile} files={files} />
       </div>
     </div>
   );

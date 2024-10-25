@@ -1,4 +1,6 @@
+//src/app/components/Sidebar/index.tsx
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { FileUploadButton } from '../FileUploadButton';
 import { FileList } from './FileList';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -12,6 +14,7 @@ interface SidebarProps {
   onFileSelect: (file: FileData) => void;
   onFileUpload: (file: Omit<FileData, 'id'>) => void;
   onFileDelete: (file: FileData) => void;
+  onClearAll?: () => void;
   error: string;
 }
 
@@ -21,14 +24,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onFileSelect,
   onFileUpload,
   onFileDelete,
+  onClearAll,
   error
 }) => {
+  const router = useRouter();
+
   const handleClearAll = async () => {
-    for (const file of files) {
-      if (file.id) {
-        await dbService.deleteFile(file.id);
-        onFileDelete(file);
+    try {
+      // Use the new bulk delete method
+      await dbService.deleteAllFiles();
+      
+      // If parent component provided onClearAll handler, use it
+      if (onClearAll) {
+        onClearAll();
+      } else {
+        // Otherwise, notify about each file deletion
+        files.forEach(file => onFileDelete(file));
       }
+
+      // Navigate to home page after successful deletion
+      router.push('/');
+      
+    } catch (error) {
+      console.error('Failed to clear all files:', error);
     }
   };
 
