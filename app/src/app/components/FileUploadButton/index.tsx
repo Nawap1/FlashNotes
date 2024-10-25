@@ -58,13 +58,6 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
         
         // Extract text from the document
         const extractedText = await api.extractText(file);
-        
-        await api.addDocument(extractedText, {
-          filename: file.name,
-          type: file.type,
-          timestamp: new Date().toISOString(),
-          page: 1
-        });
 
         // Create FileData object
         const newFile: FileData = {

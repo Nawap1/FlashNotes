@@ -17,7 +17,6 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ selectedFile }) => {
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [isDocumentAdded, setIsDocumentAdded] = useState(false);
 
   const generateSummary = async () => {
     if (!selectedFile?.content) {
@@ -29,12 +28,6 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ selectedFile }) => {
     setError('');
 
     try {
-      if (!isDocumentAdded) {
-        await api.addDocument(selectedFile.content, {
-          source: selectedFile.name || 'document.txt'
-        });
-        setIsDocumentAdded(true);
-      }
       
       const summaryResponse = await fetch('http://localhost:8000/summarize', {
         method: 'POST',
@@ -60,7 +53,6 @@ export const SummaryTab: React.FC<SummaryTabProps> = ({ selectedFile }) => {
 
   useEffect(() => {
     setSummary('');
-    setIsDocumentAdded(false);
   }, [selectedFile]);
 
   if (!selectedFile) {

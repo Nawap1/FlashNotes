@@ -1,3 +1,4 @@
+// src/app/landing_page/components/LandingContent.tsx
 export type TabType = "chat"|"summary"|"quiz";
 export interface FileData {
   id?: number;

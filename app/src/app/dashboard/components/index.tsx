@@ -114,7 +114,7 @@ export default function DashboardContent() {
       />
 
       <div className="flex-grow overflow-y-auto">
-        <MainContent selectedFile={selectedFile} />
+        <MainContent selectedFile={selectedFile} files = {files} />
       </div>
     </div>
   );

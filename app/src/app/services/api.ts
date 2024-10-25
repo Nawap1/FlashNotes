@@ -1,3 +1,4 @@
+//src/app/services/api.ts
 import axios, { AxiosError } from 'axios';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -5,6 +6,10 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 interface DocumentInput {
   content: string;
   metadata?: Record<string, any>;
+}
+
+interface MultipleDocumentInput {
+  documents: DocumentInput[];
 }
 
 interface ChatMessage {
@@ -74,50 +79,70 @@ export const api = {
     }
   },
 
-  async addDocument(content: string, metadata: Record<string, any>): Promise<void> {
+  async addDocuments(documents: (string | DocumentInput)[]): Promise<void> {
     try {
-      // Ensure content is not empty or just whitespace
-      if (!content || content.trim().length === 0) {
-        throw new APIError('Document content cannot be empty');
+      // Validate input
+      if (!Array.isArray(documents) || documents.length === 0) {
+        throw new APIError('At least one document must be provided');
       }
-  
-      // Construct the document with necessary formatting
-      const document: DocumentInput = {
-        content: content.trim(),
-        metadata: {
-          source: metadata?.source || `document_${Date.now()}.txt`, // Use current timestamp if no source is provided
-          ...metadata, // Spread any additional metadata provided
+
+      // Process and format documents
+      const formattedDocuments: DocumentInput[] = documents.map((doc, index) => {
+        if (typeof doc === 'string') {
+          // If the input is a string, create a DocumentInput with default metadata
+          if (!doc || doc.trim().length === 0) {
+            throw new APIError(`Document at index ${index} is empty`);
+          }
+          return {
+            content: doc.trim(),
+            metadata: {
+              source: `document_${Date.now()}_${index}.txt`,
+            }
+          };
+        } else {
+          // If it's already a DocumentInput, validate it
+          if (!doc.content || doc.content.trim().length === 0) {
+            throw new APIError(`Document at index ${index} has empty content`);
+          }
+          return {
+            content: doc.content.trim(),
+            metadata: {
+              source: doc.metadata?.source || `document_${Date.now()}_${index}.txt`,
+              ...doc.metadata,
+            }
+          };
         }
+      });
+
+      // Send the documents via POST request
+      const payload: MultipleDocumentInput = {
+        documents: formattedDocuments
       };
-  
-      // Send the document via POST request
-      await axiosInstance.post('/add_document', document);
+
+      await axiosInstance.post('/add_documents', payload);
       
     } catch (error) {
-      console.error('[addDocument Error]', error);
-  
+      console.error('[addDocuments Error]', error);
+
       if (axios.isAxiosError(error)) {
         const serverErrorDetail = error.response?.data?.detail;
         const serverErrorStatus = error.response?.status;
-  
-        // Log server error response if available
+
         if (error.response?.data) {
           console.error('Server response:', error.response.data);
         }
-  
+
         throw new APIError(
-          serverErrorDetail || 'Failed to add document to vector store',
+          serverErrorDetail || 'Failed to add documents to vector store',
           serverErrorStatus
         );
       }
-  
-      // Rethrow API errors without masking them
+
       if (error instanceof APIError) {
         throw error;
       }
-  
-      // Handle other unexpected errors
-      throw new APIError('An unexpected error occurred while adding the document');
+
+      throw new APIError('An unexpected error occurred while adding the documents');
     }
   },
 
@@ -133,7 +158,6 @@ export const api = {
 
       const response = await axiosInstance.post<ChatResponse>('/chat', message);
       
-      // Ensure the response has the expected structure
       if (!response.data || typeof response.data.answer !== 'string') {
         throw new APIError('Invalid response format from chat endpoint');
       }
@@ -152,8 +176,6 @@ export const api = {
       );
     }
   },
-
-
 };
 
-export type { ChatResponse, ChatMessage, DocumentInput };
+export type { ChatResponse, ChatMessage, DocumentInput, MultipleDocumentInput };

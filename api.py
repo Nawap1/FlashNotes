@@ -1,13 +1,12 @@
 from contextlib import asynccontextmanager
 import os
-import shutil
 from typing import List, Optional, Dict
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
-from langchain_core.callbacks import CallbackManager, StreamingStdOutCallbackHandler
+from langchain_core.callbacks import StreamingStdOutCallbackHandler
 from langchain_community.chat_models import ChatOllama
 from langchain.chains.summarize import load_summarize_chain
 from langchain.text_splitter import CharacterTextSplitter, TokenTextSplitter
@@ -17,18 +16,10 @@ from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import Document, AIMessage, HumanMessage
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate, AIMessagePromptTemplate
-from utils import parse_json
-import time
-import asyncio
-import sqlite3
-from utils import DocumentReader
-# Global variables for single conversation
-chat_model: Optional[ChatOllama] = None
-embeddings: Optional[OllamaEmbeddings] = None
-vector_store: Optional[Chroma] = None
-conversation_chain: Optional[ConversationalRetrievalChain] = None
-PERSIST_DIRECTORY = "./db"
+from utils import parse_json, DocumentReader
+import chromadb
 
+# Models
 class ChatMessage(BaseModel):
     query: str
 
@@ -40,7 +31,15 @@ class DocumentInput(BaseModel):
     content: str
     metadata: Optional[Dict] = None
 
-# Initialize functions remain the same
+class MultipleDocumentInput(BaseModel):
+    documents: List[DocumentInput]
+
+# Global variables
+chat_model: Optional[ChatOllama] = None
+embeddings: Optional[OllamaEmbeddings] = None
+vector_store: Optional[Chroma] = None
+conversation_chain: Optional[ConversationalRetrievalChain] = None
+
 def initialize_chat_ollama():
     return ChatOllama(
         base_url="http://localhost:11434",
@@ -55,13 +54,19 @@ def initialize_embeddings():
     )
 
 def initialize_vector_store() -> Chroma:
-    """Initialize a single vector store"""
+    """Initialize vector store with in-memory ChromaDB"""
+    client = chromadb.Client(settings=chromadb.Settings(
+        is_persistent=False,
+        allow_reset=True
+    ))
+    
     return Chroma(
+        client=client,
         embedding_function=embeddings,
-        collection_name="chatbot_docs",
-        persist_directory=PERSIST_DIRECTORY
+        collection_name="chatbot_docs"
     )
 
+# Rest of the helper functions remain the same
 def create_rag_chain_with_memory(vector_store: Chroma) -> ConversationalRetrievalChain:
     """Create a RAG chain with conversation memory"""
     system_message = SystemMessagePromptTemplate.from_template(
@@ -99,8 +104,9 @@ def create_rag_chain_with_memory(vector_store: Chroma) -> ConversationalRetrieva
         rephrase_question=False,
         verbose=True
     )
+
 def format_chat_history(chat_history, max_messages=5):
-    """Only keep the last 'max_messages' to avoid long token sequences."""
+    """Format chat history - implementation remains the same"""
     truncated_history = chat_history[-max_messages:]
     formatted_history = []
     for message in truncated_history:
@@ -109,47 +115,6 @@ def format_chat_history(chat_history, max_messages=5):
         elif isinstance(message, AIMessage):
             formatted_history.append(f"<|im_start|>assistant\n{message.content}<|im_end|>")
     return "\n".join(formatted_history)
-
-
-async def safe_delete_database():
-    """Safely delete the database files with retries"""
-    max_retries = 5
-    retry_delay = 1  # seconds
-    
-    for attempt in range(max_retries):
-        try:
-            # First try to close any open connections
-            try:
-                db_path = os.path.join(PERSIST_DIRECTORY, "chroma.sqlite3")
-                if os.path.exists(db_path):
-                    # Try to open and immediately close the database
-                    conn = sqlite3.connect(db_path)
-                    conn.close()
-            except sqlite3.Error:
-                pass  # Ignore any SQLite errors here
-            
-            # Delete the collection first
-            if vector_store:
-                vector_store.delete_collection()
-                # Small delay after deleting collection
-                await asyncio.sleep(0.5)
-            
-            # Try to remove the directory
-            if os.path.exists(PERSIST_DIRECTORY):
-                # On Windows, sometimes we need to make a few attempts
-                for _ in range(3):
-                    try:
-                        shutil.rmtree(PERSIST_DIRECTORY)
-                        break
-                    except PermissionError:
-                        await asyncio.sleep(0.5)
-            return True
-        except Exception as e:
-            if attempt == max_retries - 1:
-                print(f"Failed to delete database after {max_retries} attempts: {str(e)}")
-                return False
-            await asyncio.sleep(retry_delay)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -161,23 +126,14 @@ async def lifespan(app: FastAPI):
     vector_store = initialize_vector_store()
     conversation_chain = create_rag_chain_with_memory(vector_store)
     
-    os.makedirs(PERSIST_DIRECTORY, exist_ok=True)
+    yield
     
-    try:
-        yield
-    finally:
-        # Shutdown
-        # First, clear any active conversations or references
-        conversation_chain = None
-        
-        # Then attempt database cleanup
-        success = await safe_delete_database()
-        if not success:
-            print("Warning: Could not completely clean up database files")
+    # Shutdown - no need to clean up persistent directory since we're using in-memory storage
+    conversation_chain = None
+    vector_store = None
 
 app = FastAPI(title="Flash Notes Bot", lifespan=lifespan)
 
-# CORS middleware remains the same
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -186,28 +142,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.post("/add_document")
-async def add_document(document: DocumentInput):
-    """Add a document to the vector store"""
+@app.post("/add_documents")
+async def add_documents(documents: MultipleDocumentInput):
+    """Add multiple documents to the vector store"""
     try:
         global vector_store, conversation_chain
         
         # Clear existing data
         if vector_store:
-            vector_store.delete_collection()
+            vector_store._client.reset()
             vector_store = initialize_vector_store()
             conversation_chain = create_rag_chain_with_memory(vector_store)
         
-        doc = Document(page_content=document.content, metadata=document.metadata or {})
+        # Process all documents
+        all_docs = []
         text_splitter = CharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=100,
             separator="\n"
         )
-        docs = text_splitter.split_documents([doc])
-        vector_store.add_documents(docs)
         
-        return {"message": "Document added successfully"}
+        for doc_input in documents.documents:
+            doc = Document(
+                page_content=doc_input.content,
+                metadata=doc_input.metadata or {}
+            )
+            split_docs = text_splitter.split_documents([doc])
+            all_docs.extend(split_docs)
+        
+        # Add all documents to the vector store
+        vector_store.add_documents(all_docs)
+        
+        return {"message": f"Successfully added {len(documents.documents)} documents"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

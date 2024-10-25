@@ -10,9 +10,10 @@ import type { TabType, FileData } from '@/types';
 
 interface MainContentProps {
   selectedFile?: FileData;
+  files: FileData[];
 }
 
-export const MainContent: React.FC<MainContentProps> = ({ selectedFile }) => {
+export const MainContent: React.FC<MainContentProps> = ({ selectedFile,files }) => {
   const [activeTab, setActiveTab] = useState<TabType>('chat');
 
   return (
@@ -47,10 +48,10 @@ export const MainContent: React.FC<MainContentProps> = ({ selectedFile }) => {
         </TabsList>
 
         <TabsContent value="chat">
-          <ChatTab selectedFile={selectedFile} />
+          <ChatTab files={files} />
         </TabsContent>
         <TabsContent value="summary">
-          <SummaryTab selectedFile={selectedFile ?? null} />
+          <SummaryTab selectedFile={selectedFile} />
         </TabsContent>
         <TabsContent value="quiz">
           <QuizTab selectedFile={selectedFile} />

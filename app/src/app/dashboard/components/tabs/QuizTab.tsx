@@ -57,9 +57,6 @@ export const QuizTab = ({ selectedFile }) => {
     setError('');
 
     try {
-      await api.addDocument(selectedFile.content, {
-        source: selectedFile.name || 'document.txt'
-      });
       
       const response = await fetch('http://localhost:8000/generate_quiz', {
         method: 'POST',
