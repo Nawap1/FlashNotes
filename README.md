@@ -6,11 +6,11 @@
 Flash Notes is an interactive document assistant that leverages Retrieval-Augmented Generation (RAG) to enhance user interaction with documents. It allows users to upload documents (PDF, PPTX, or TXT) and engage with them using Qwen 2.5. With Flash Notes, users can chat with their documents, generate summaries, and create quizzes based on the content, all designed to enhance document comprehension and learning.
 
 ## Features
-- **RAG (Retrieval-Augmented Generation)**: Utilizes RAG to improve response relevance by retrieving document-specific context before generating responses.
 - **Chat with Documents**: Ask questions directly about your documents and receive accurate, context-aware responses.
 - **Summarize Content**: Generate concise summaries of key points.
 - **Generate Quizzes**: Automatically create quizzes to test knowledge of the document content.
-
+- **RAG (Retrieval-Augmented Generation)**: Utilizes RAG to improve response relevance by retrieving document-specific context before generating responses.
+- **OCR for Image-Based Text**: Extracts text from images within documents using Tesseract OCR.
 
 ## Tech Stack
 - **Frontend**: Next.js
@@ -27,6 +27,7 @@ Flash Notes is an interactive document assistant that leverages Retrieval-Augmen
 - **Python 3.10+** for the FastAPI backend
 - **Node.js** for the Next.js frontend
 - **Ollama** for the LLM model deployment
+- **Tesseract OCR** for extracting text from images within documents (download link below)
 
 ### Installation
 
@@ -46,7 +47,12 @@ cd FlashNotes
 
 - Download and install Ollama from [here](https://ollama.com/), following the installation instructions provided.
 
-#### 4. Prepare the Model
+#### 4. Install Tesseract OCR (For Image-Based Text Extraction)
+
+- Download Tesseract OCR from [this link](https://sourceforge.net/projects/tesseract-ocr-alt/files/tesseract-ocr-setup-3.02.02.exe/download) and follow the installation instructions.
+- Once installed, ensure Tesseract is accessible in your system’s PATH.
+
+#### 5. Prepare the Model
 
 1. Copy the downloaded model file into the project directory.
 2. Create a file named `Modelfile` in the same directory with the following content:
@@ -66,7 +72,7 @@ cd FlashNotes
    ollama create qwen3 -f Modelfile
    ```
 
-#### 5. Install Backend Dependencies
+#### 6. Install Backend Dependencies
 
 ```bash
 pip install -r requirements.txt
@@ -124,5 +130,6 @@ pip install -r requirements.txt
    - **Chat**: Navigate to the chat section to ask questions about the document.
    - **Summarize**: Go to the summary tab and click **Generate Summary** for key takeaways.
    - **Quiz**: Go to the quiz tab and click **Generate Quiz** to create questions based on the document content.
+   - **OCR for Images**: If your document contains images with text, the system will use Tesseract OCR to extract and process the text.
 
 ---
