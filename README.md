@@ -21,7 +21,7 @@ Flash Notes is an interactive document assistant that allows users to upload doc
 ## Getting Started
 
 ### Prerequisites
-- **Python 3.8+** for the FastAPI backend
+- **Python 3.10+** for the FastAPI backend
 - **Node.js** for the Next.js frontend
 - **Ollama** for the LLM model deployment
 
@@ -123,6 +123,3 @@ pip install -r requirements.txt
    - **Quiz**: Go to the quiz tab and click **Generate Quiz** to create questions based on the document content.
 
 ---
-
-## License
-This project is licensed under the MIT License.
