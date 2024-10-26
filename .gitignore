@@ -1,10 +1,12 @@
 /samples/
 /models/
 Modelfile
-__pycache__/
 /venv
 /db
 /node_modules
 package.json
 package-lock.json
 notebooks/
+
+__pycache__/
+*.pyc
