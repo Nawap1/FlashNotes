@@ -136,3 +136,4 @@ def parse_json(json_string):
     cleaned_string = json_string.replace('```json', '').replace('```', '').strip()
     
     return json.loads(cleaned_string)
+
