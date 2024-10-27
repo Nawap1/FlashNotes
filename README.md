@@ -64,6 +64,7 @@ cd FlashNotes
    PARAMETER temperature 0.7
    PARAMETER top_k 40
    PARAMETER top_p 0.95
+   PARAMETER num_ctx 10000
    ```
 
 3. Create the Ollama model by running:
