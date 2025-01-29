@@ -134,3 +134,8 @@ pip install -r requirements.txt
    - **OCR for Images**: If your document contains images with text, the system will use Tesseract OCR to extract and process the text.
 
 ---
+## Demo
+
+https://github.com/user-attachments/assets/0a2ba9d2-5eed-40db-9833-83f311540d45
+
+
